@@ -31,10 +31,8 @@
        - Overlapping source and destination buffers in `memcpy` or `strcpy`.
        - Calling methods on empty standard containers (e.g., `std::vector::front()` when empty).
 
-   **Output Format:**
-   If no Undefined Behavior is found, output exactly: "No Undefined Behavior identified."
 
-   If UB is found, report each instance using the following structure:
+If UB is found, report each instance using the following structure:
    - **Vulnerability:** [e.g., Signed Integer Overflow, Strict Aliasing Violation]
    - **Location:** [Function name or snippet reference]
    - **Standard Rule / Analysis:** A precise explanation of exactly which C++ standard rule is violated. Explain the mechanism of the UB.
@@ -43,7 +41,9 @@
    - **Remediation:** Provide the exact, standard-compliant code change required to fix the issue (e.g., using `base::CheckedNumeric`, `std::bit_cast`, or ensuring proper
    bounds checking before pointer arithmetic).
 
+
 **Report Clear Negative Feedback:**
     - Provide **only negative feedback** (bugs, performance bottlenecks, and style violations).
     - Skip all pleasantries and praises.
     - Format your output clearly, referencing the exact file and line number for every issue you find
+    - If no Undefined Behavior is found, output exactly:  "No Undefined Behavior identified."

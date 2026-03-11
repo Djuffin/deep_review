@@ -31,10 +31,7 @@
        - Incorrect memory ordering applied to `std::atomic` operations.
        - Unsafe destruction of synchronization primitives (e.g., destroying a mutex while it is locked or being waited on).
 
-   **Output Format:**
-   If no concurrency or threading issues are found, output exactly: "No concurrency issues identified."
-
-   If issues are found, report each one using the following structure:
+If issues are found, report each one using the following structure:
    - **Vulnerability:** [e.g., Data Race, Cross-Thread Use-After-Free, Potential Deadlock]
    - **Location:** [Function name or snippet reference]
    - **Analysis:** A concise explanation of the execution interleaving, thread interactions, or sequence of events that triggers the concurrency violation. Identify the
@@ -47,3 +44,4 @@
     - Provide **only negative feedback** (bugs, performance bottlenecks, and style violations).
     - Skip all pleasantries and praises.
     - Format your output clearly, referencing the exact file and line number for every issue you find
+    - If no concurrency issues are found, output exactly: "No concurrency issues identified."
