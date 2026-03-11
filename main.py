@@ -30,7 +30,13 @@ class ReviewDashboard:
 
     def update_status(self, agent_name: str, status: str, elapsed: float):
         with self.lock:
-            self.agent_states[agent_name] = {'status': status, 'elapsed': elapsed}
+            # If transitioning to Running, record the start time to calculate elapsed dynamically
+            if status == 'Running' and self.agent_states.get(agent_name, {}).get('status') != 'Running':
+                self.agent_states[agent_name] = {'status': status, 'start_time': time.time(), 'elapsed': 0.0}
+            else:
+                # Keep the start time if it's already running, just update the status/final elapsed
+                start_time = self.agent_states.get(agent_name, {}).get('start_time', time.time())
+                self.agent_states[agent_name] = {'status': status, 'start_time': start_time, 'elapsed': elapsed}
 
     def _render_loop(self):
         # Hide cursor
@@ -50,14 +56,15 @@ class ReviewDashboard:
                 for name in sorted(self.agent_states.keys()):
                     state = self.agent_states[name]
                     status = state['status']
-                    elapsed = state['elapsed']
                     
                     if status == 'Running':
-                        print(f"[\033[93m~\033[0m] {name:<20} | Running ({elapsed:.1f}s)\033[K")
+                        # Calculate elapsed time dynamically for Running state
+                        current_elapsed = time.time() - state.get('start_time', time.time())
+                        print(f"[\033[93m~\033[0m] {name:<20} | Running ({current_elapsed:.1f}s)\033[K")
                     elif status == 'Done':
-                        print(f"[\033[92m✓\033[0m] {name:<20} | Done ({elapsed:.1f}s)\033[K")
+                        print(f"[\033[92m✓\033[0m] {name:<20} | Done ({state['elapsed']:.1f}s)\033[K")
                     elif status == 'Failed':
-                        print(f"[\033[91mx\033[0m] {name:<20} | Failed\033[K")
+                        print(f"[\033[91mx\033[0m] {name:<20} | Failed ({state['elapsed']:.1f}s)\033[K")
                     else:
                         print(f"[ ] {name:<20} | {status}\033[K")
                 print("-" * 40 + "\033[K")
@@ -83,6 +90,8 @@ def main():
     parser = argparse.ArgumentParser(description="Automated LLM-based Code Review System")
     parser.add_argument("url", help="Gerrit CL URL or numeric ID")
     parser.add_argument("--out-dir", type=str, help="Directory to save files (defaults to CL ID)")
+    parser.add_argument("--model", type=str, default="gemini-3-flash-preview", 
+                        help="The Gemini model to use for analysis and review (default: gemini-3-flash-preview)")
     
     args = parser.parse_args()
 
@@ -99,6 +108,7 @@ def main():
 
     output_dir = Path(args.out_dir) if args.out_dir else Path(cl_id)
     gemini_client = GeminiClient(api_key=api_key)
+    model_name = args.model
 
     try:
         # Step 1: Fetch Change
@@ -106,8 +116,8 @@ def main():
         change_info = fetch_change(args.url, output_dir)
 
         # Step 2: Analyze Context
-        print_header("Analyzing Context")
-        analysis = analyze_context(output_dir, gemini_client)
+        print_header(f"Analyzing Context ({model_name})")
+        analysis = analyze_context(output_dir, gemini_client, model_name)
         
         if not analysis:
             print("Failed to analyze context. Aborting.")
@@ -118,7 +128,7 @@ def main():
         fetch_extra_context(output_dir, change_info, analysis)
 
         # Step 4: Perform Review
-        print_header("Performing Multi-Agent Code Review")
+        print_header(f"Performing Multi-Agent Code Review ({model_name})")
         
         # Count agents to allocate dashboard space
         agents_dir = Path(__file__).parent / "agents"
@@ -134,6 +144,7 @@ def main():
         run_review(
             cl_dir=output_dir, 
             gemini_client=gemini_client, 
+            model_name=model_name,
             status_callback=dashboard.update_status
         )
 

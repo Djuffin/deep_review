@@ -11,7 +11,7 @@ from core.models import AnalysisResult
 from core.utils import read_directory_context, save_file
 from core.exceptions import ParseError
 
-def analyze_context(cl_dir: Path, gemini_client: GeminiClient) -> Optional[AnalysisResult]:
+def analyze_context(cl_dir: Path, gemini_client: GeminiClient, model_name: str) -> Optional[AnalysisResult]:
     """
     Reads the downloaded files and asks the LLM to identify the project and recommend
     additional context files needed for a full review.
@@ -32,10 +32,7 @@ def analyze_context(cl_dir: Path, gemini_client: GeminiClient) -> Optional[Analy
         print(f"Error reading prompt file from {prompt_path}: {e}")
         return None
 
-    print("Sending request to Gemini API (this may take a few moments)...")
-    
-    # We use a fast, reasoning-capable model for this phase.
-    model_name = 'gemini-3-flash-preview'
+    print(f"Sending request to Gemini API ({model_name})...")
     
     # We don't cache here because this is a one-off request
     response_text, usage = gemini_client.generate_content(

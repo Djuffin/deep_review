@@ -45,7 +45,7 @@ def _run_single_agent(
         return AgentReview(agent_name=agent_name, response_text=None, status="Failed", error_message=str(e))
 
 
-def run_review(cl_dir: Path, gemini_client: GeminiClient, status_callback: Callable[[str, str, float], None]) -> None:
+def run_review(cl_dir: Path, gemini_client: GeminiClient, model_name: str, status_callback: Callable[[str, str, float], None]) -> None:
     """
     Orchestrates the multi-agent code review process.
     Uses status_callback(agent_name, status, elapsed_time) to report progress to the UI.
@@ -75,7 +75,6 @@ def run_review(cl_dir: Path, gemini_client: GeminiClient, status_callback: Calla
     save_file(cl_dir / "full_context", document_text)
     
     # 3. Create cache
-    model_name = 'gemini-3.1-pro-preview'
     cache_name = gemini_client.create_cached_content(model_name, document_text, ttl_seconds=600)
     
     if not cache_name:
