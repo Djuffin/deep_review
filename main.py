@@ -153,11 +153,15 @@ def main():
 
         # Step 5: Summarize Reviews
         print_header(f"Consolidating Final Review ({model_name})")
-        summarize_reviews(cl_dir=output_dir, gemini_client=gemini_client, model_name=model_name)
+        final_summary = summarize_reviews(cl_dir=output_dir, gemini_client=gemini_client, model_name=model_name)
+
+        if final_summary:
+            print(f"\n{final_summary}\n")
 
         print(f"\n{'+'*50}")
         print(f"SUCCESS: Pipeline complete!")
-        print(f"Check the '{output_dir / 'final_summary.md'}' file for the final results.")
+        print(f"Check the '{output_dir / 'final_summary.md'}' file for the final summary.")
+        print(f"Check the '{output_dir / 'code_review.md'}' file for the full detailed review.")
         print(f"{'+'*50}")
 
     except Exception as e:

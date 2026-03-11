@@ -2,11 +2,12 @@
 Module for summarizing and deduplicating the results of multi-agent reviews.
 """
 
+from typing import Optional
 from pathlib import Path
 from core.gemini_client import GeminiClient
 from core.utils import save_file
 
-def summarize_reviews(cl_dir: Path, gemini_client: GeminiClient, model_name: str) -> None:
+def summarize_reviews(cl_dir: Path, gemini_client: GeminiClient, model_name: str) -> Optional[str]:
     """
     Reads the diff.patch and code_review.md files, and uses the LLM to deduplicate
     and summarize the findings into a final, consolidated review.
@@ -18,7 +19,7 @@ def summarize_reviews(cl_dir: Path, gemini_client: GeminiClient, model_name: str
     
     if not diff_path.exists() or not review_path.exists():
         print("Error: Missing diff.patch or code_review.md for summarization.")
-        return
+        return None
 
     # Load the raw files
     try:
@@ -38,7 +39,7 @@ def summarize_reviews(cl_dir: Path, gemini_client: GeminiClient, model_name: str
                 commit_info_text = f.read()
     except Exception as e:
         print(f"Error reading files for summarization: {e}")
-        return
+        return None
 
     # Load prompt
     prompt_path = Path(__file__).parent.parent / "prompts" / "review_summary.md"
@@ -47,7 +48,7 @@ def summarize_reviews(cl_dir: Path, gemini_client: GeminiClient, model_name: str
             prompt = f.read().strip()
     except Exception as e:
         print(f"Error reading prompt file from {prompt_path}: {e}")
-        return
+        return None
 
     document_text = (
         f"--- commit_info ---\n{commit_info_text}\n\n"
@@ -66,9 +67,11 @@ def summarize_reviews(cl_dir: Path, gemini_client: GeminiClient, model_name: str
 
     if not response_text:
         print("Failed to get review summary from Gemini API.")
-        return
+        return None
 
     # Save output
     out_file = cl_dir / "final_summary.md"
     save_file(out_file, response_text)
     print(f"Consolidated summary saved to {out_file}")
+    
+    return response_text
