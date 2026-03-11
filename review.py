@@ -19,6 +19,7 @@ import sys
 import json
 import urllib.request
 import urllib.error
+import concurrent.futures
 
 def get_file_contents(cl_dir):
     contents = []
@@ -162,6 +163,24 @@ def main():
         print("Error: GEMINI_API_KEY environment variable not set.")
         sys.exit(1)
 
+    # Read agent prompts from the 'agents' directory
+    agents_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agents")
+    if not os.path.isdir(agents_dir):
+        print(f"Error: Agents directory '{agents_dir}' does not exist.")
+        sys.exit(1)
+
+    agents = []
+    for filename in os.listdir(agents_dir):
+        if filename.endswith(".md"):
+            agent_name = filename[:-3]
+            with open(os.path.join(agents_dir, filename), "r", encoding="utf-8") as f:
+                agent_prompt = f.read()
+            agents.append((agent_name, agent_prompt))
+            
+    if not agents:
+        print(f"Error: No agent prompts (.md files) found in '{agents_dir}'.")
+        sys.exit(1)
+
     print(f"Reading files in '{cl_dir}'...")
     file_contents = get_file_contents(cl_dir)
     if not file_contents:
@@ -170,24 +189,6 @@ def main():
 
     document_text = "\n".join(file_contents)
     
-    prompt = '''1. **Review logic of the code:** Focus on:
-    - **Algorithmic Correctness:** Does the implementation actually fulfill the requirements? Are there any logical leaps or flaws?
-    - **Edge Cases & Boundaries:** What happens with zero-values, empty collections, extremely large inputs, or unexpected null states?
-    - **State Management:** If the code manages state, are the transitions logical? Is it possible to get stuck in an invalid state?
-2. **Review the implementation details and style:** Pay special attention to:
-    - **Memory safety:** Watch for use-after-free, dangling pointers, and out-of-bounds access. Ensure raw pointers do not take ownership.
-    - **Buffer Safety:** Enforce rules around `UNSAFE_BUFFERS` and `UNSAFE_TODO`. Flag C-style arrays or raw pointer arithmetic; suggest `base::span`.
-    - **Undefined Behavior:** Flag signed integer overflow and uninitialized variables.
-    - **Thread Safety:**  Watch for data races, deadlocks & lock ordering.
-    - **Error Handling** Look for unhandled errors
-    - **Performance:** Look for pass-by-reference efficiencies, correct move semantics (`std::move`), loop copies
-    - **Typos:** Catch misleading comments or typos.
-    - **Modern C++ / JS Practices**
-3. **Report Feedback:**
-    - Provide **only negative feedback** (bugs, performance bottlenecks, and style violations).
-    - Skip all pleasantries and praises.
-    - Format your output clearly, referencing the exact file and line number for every issue you find'''
-
     # The user specifically requested this model
     model_name = 'gemini-3.1-pro-preview'
     
@@ -195,21 +196,47 @@ def main():
     cache_name = create_cached_content(api_key, model_name, document_text)
     
     if cache_name:
-        print(f"Context cached successfully ({cache_name}). Generating code review...")
-        response_text = call_gemini_api(api_key, model_name, prompt, cache_name=cache_name)
-        delete_cached_content(api_key, cache_name)
+        print(f"Context cached successfully ({cache_name}).")
     else:
-        print("Caching failed or is unsupported for this context size. Falling back to direct API request...")
-        response_text = call_gemini_api(api_key, model_name, prompt, document_text=document_text)
+        print("Caching failed or is unsupported for this context size. Falling back to direct API requests...")
 
-    if not response_text:
-        print("Failed to get review from Gemini API.")
-        sys.exit(1)
+    def run_agent(agent_data):
+        agent_name, prompt = agent_data
+        print(f"Generating review from agent: {agent_name}...")
+        if cache_name:
+            response_text = call_gemini_api(api_key, model_name, prompt, cache_name=cache_name)
+        else:
+            response_text = call_gemini_api(api_key, model_name, prompt, document_text=document_text)
+
+        if response_text:
+            return f"## Review by {agent_name}\n\n{response_text}"
+        else:
+            return f"## Review by {agent_name}\n\n(Failed to get review from this agent)"
+
+    all_reviews = []
+    
+    # Run agents in parallel using a thread pool
+    max_workers = min(10, len(agents))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all tasks
+        future_to_agent = {executor.submit(run_agent, agent): agent for agent in agents}
+        
+        # Collect results as they complete, but we want to keep them in some order or just append
+        for future in concurrent.futures.as_completed(future_to_agent):
+            try:
+                result = future.result()
+                all_reviews.append(result)
+            except Exception as exc:
+                agent_name = future_to_agent[future][0]
+                all_reviews.append(f"## Review by {agent_name}\n\n(Exception occurred: {exc})")
+
+    if cache_name:
+        delete_cached_content(api_key, cache_name)
 
     # Save the output to the code_review.md file
     out_file = os.path.join(cl_dir, "code_review.md")
     with open(out_file, "w", encoding="utf-8") as f:
-        f.write(response_text)
+        f.write("\n\n---\n\n".join(all_reviews))
     
     print(f"\nReview complete! Saved to {out_file}")
 
