@@ -24,7 +24,7 @@ def analyze_context(cl_dir: Path, gemini_client: GeminiClient, model_name: str) 
         return None
 
     # Load prompt
-    prompt_path = Path(__file__).parent.parent / "prompts" / "preview_change_prompt.md"
+    prompt_path = Path(__file__).parent.parent / "prompts" / "preview_change.md"
     try:
         with open(prompt_path, "r", encoding="utf-8") as f:
             prompt = f.read()
