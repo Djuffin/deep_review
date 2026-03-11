@@ -1,72 +1,152 @@
 """
-main.py
-
-Orchestrates the entire code review pipeline by calling the necessary scripts
-in sequence:
-1. load_change.py: Downloads the diff and original files.
-2. analyze_change.py: Generates a summary and identifies extra context files.
-3. load_extra_context.py: Downloads the identified extra context files.
-4. review.py: Runs multi-agent parallel code review.
-
-Usage: python3 main.py <gerrit-cl-url>
+Command Line Interface and Orchestrator for the Code Review System.
 """
 
 import sys
-import subprocess
-import re
+import os
+import time
+import threading
+import argparse
+from pathlib import Path
 
-def run_step(command, step_name):
+from core.gemini_client import GeminiClient
+from core.change_fetcher import fetch_change, parse_gerrit_url
+from core.context_analyzer import analyze_context
+from core.extra_context_fetcher import fetch_extra_context
+from core.review_engine import run_review
+
+def print_header(title: str):
     print(f"\n{'='*50}")
-    print(f"--- STEP: {step_name} ---")
-    print(f"Running: {' '.join(command)}")
+    print(f"--- {title} ---")
     print(f"{'='*50}")
 
-    try:
-        # Use check_call to raise an exception if the command fails
-        subprocess.check_call(command)
-    except subprocess.CalledProcessError as e:
-        print(f"\n[!] Error: Step '{step_name}' failed with exit code {e.returncode}.")
-        sys.exit(1)
-    except KeyboardInterrupt:
-        print("\n[!] Process interrupted by user.")
-        sys.exit(1)
+class ReviewDashboard:
+    """Manages the live CLI dashboard for the parallel review agents."""
+    def __init__(self):
+        self.agent_states = {}
+        self.active = False
+        self.lock = threading.Lock()
+        self.thread = None
+
+    def update_status(self, agent_name: str, status: str, elapsed: float):
+        with self.lock:
+            self.agent_states[agent_name] = {'status': status, 'elapsed': elapsed}
+
+    def _render_loop(self):
+        # Hide cursor
+        sys.stdout.write("\033[?25l")
+        sys.stdout.flush()
+        
+        while self.active:
+            with self.lock:
+                if not self.agent_states:
+                    continue
+                    
+                # Move cursor up to the top of the dashboard
+                num_agents = len(self.agent_states)
+                sys.stdout.write(f"\033[{num_agents + 2}A")
+                
+                print("-" * 40 + "\033[K")
+                for name in sorted(self.agent_states.keys()):
+                    state = self.agent_states[name]
+                    status = state['status']
+                    elapsed = state['elapsed']
+                    
+                    if status == 'Running':
+                        print(f"[\033[93m~\033[0m] {name:<20} | Running ({elapsed:.1f}s)\033[K")
+                    elif status == 'Done':
+                        print(f"[\033[92m✓\033[0m] {name:<20} | Done ({elapsed:.1f}s)\033[K")
+                    elif status == 'Failed':
+                        print(f"[\033[91mx\033[0m] {name:<20} | Failed\033[K")
+                    else:
+                        print(f"[ ] {name:<20} | {status}\033[K")
+                print("-" * 40 + "\033[K")
+            time.sleep(0.2)
+            
+        # Restore cursor
+        sys.stdout.write("\033[?25h")
+        sys.stdout.flush()
+
+    def start(self, num_agents: int):
+        self.active = True
+        # Allocate empty lines for the dashboard to overwrite
+        print("\n" * (num_agents + 2))
+        self.thread = threading.Thread(target=self._render_loop)
+        self.thread.start()
+
+    def stop(self):
+        self.active = False
+        if self.thread:
+            self.thread.join()
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python3 main.py <gerrit-cl-url>")
+    parser = argparse.ArgumentParser(description="Automated LLM-based Code Review System")
+    parser.add_argument("url", help="Gerrit CL URL or numeric ID")
+    parser.add_argument("--out-dir", type=str, help="Directory to save files (defaults to CL ID)")
+    
+    args = parser.parse_args()
+
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        print("Error: GEMINI_API_KEY environment variable not set.")
         sys.exit(1)
 
-    url = sys.argv[1]
-
-    # Extract the CL ID from the URL to pass to the subsequent scripts
-    # Example: https://chromium-review.googlesource.com/c/chromium/src/+/7652046
-    match = re.search(r'\+/(\d+)', url)
-    if match:
-        cl_id = match.group(1)
-    elif url.isdigit():
-        cl_id = url
-    else:
-        print("Error: Could not extract numeric CL ID from the provided URL.")
+    try:
+        _, cl_id = parse_gerrit_url(args.url)
+    except ValueError as e:
+        print(f"Error: {e}")
         sys.exit(1)
 
-    print(f"Starting review pipeline for CL: {cl_id}")
+    output_dir = Path(args.out_dir) if args.out_dir else Path(cl_id)
+    gemini_client = GeminiClient(api_key=api_key)
 
-    # 1. Load the change
-    run_step([sys.executable, "load_change.py", url], "Load Change")
+    try:
+        # Step 1: Fetch Change
+        print_header(f"Fetching Change {cl_id}")
+        change_info = fetch_change(args.url, output_dir)
 
-    # 2. Analyze the change to generate summary and context file list
-    run_step([sys.executable, "analyze_change.py", cl_id], "Analyze Change")
+        # Step 2: Analyze Context
+        print_header("Analyzing Context")
+        analysis = analyze_context(output_dir, gemini_client)
+        
+        if not analysis:
+            print("Failed to analyze context. Aborting.")
+            sys.exit(1)
 
-    # 3. Load the extra context files
-    run_step([sys.executable, "load_extra_context.py", cl_id], "Load Extra Context")
+        # Step 3: Fetch Extra Context
+        print_header("Loading Extra Context")
+        fetch_extra_context(output_dir, change_info, analysis)
 
-    # 4. Perform the final multi-agent code review
-    run_step([sys.executable, "review.py", cl_id], "Perform Code Review")
+        # Step 4: Perform Review
+        print_header("Performing Multi-Agent Code Review")
+        
+        # Count agents to allocate dashboard space
+        agents_dir = Path(__file__).parent / "agents"
+        num_agents = len(list(agents_dir.glob("*.md"))) if agents_dir.is_dir() else 0
+        
+        if num_agents == 0:
+            print("No agents found. Skipping review.")
+            sys.exit(0)
 
-    print(f"\n{'+'*50}")
-    print(f"SUCCESS: Pipeline complete!")
-    print(f"Check the '{cl_id}/code_review.md' file for the final results.")
-    print(f"{'+'*50}")
+        dashboard = ReviewDashboard()
+        dashboard.start(num_agents)
+
+        run_review(
+            cl_dir=output_dir, 
+            gemini_client=gemini_client, 
+            status_callback=dashboard.update_status
+        )
+
+        dashboard.stop()
+
+        print(f"\n{'+'*50}")
+        print(f"SUCCESS: Pipeline complete!")
+        print(f"Check the '{output_dir / 'code_review.md'}' file for the final results.")
+        print(f"{'+'*50}")
+
+    except Exception as e:
+        print(f"\n[!] Pipeline failed: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
