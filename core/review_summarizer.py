@@ -13,6 +13,8 @@ def summarize_reviews(cl_dir: Path, gemini_client: GeminiClient, model_name: str
     """
     diff_path = cl_dir / "diff.patch"
     review_path = cl_dir / "code_review.md"
+    summary_path = cl_dir / "summary"
+    commit_info_path = cl_dir / "commit_info"
     
     if not diff_path.exists() or not review_path.exists():
         print("Error: Missing diff.patch or code_review.md for summarization.")
@@ -24,6 +26,16 @@ def summarize_reviews(cl_dir: Path, gemini_client: GeminiClient, model_name: str
             diff_text = f.read()
         with open(review_path, "r", encoding="utf-8") as f:
             review_text = f.read()
+            
+        summary_text = ""
+        if summary_path.exists():
+            with open(summary_path, "r", encoding="utf-8") as f:
+                summary_text = f.read()
+                
+        commit_info_text = ""
+        if commit_info_path.exists():
+            with open(commit_info_path, "r", encoding="utf-8") as f:
+                commit_info_text = f.read()
     except Exception as e:
         print(f"Error reading files for summarization: {e}")
         return
@@ -37,7 +49,12 @@ def summarize_reviews(cl_dir: Path, gemini_client: GeminiClient, model_name: str
         print(f"Error reading prompt file from {prompt_path}: {e}")
         return
 
-    document_text = f"--- diff.patch ---\n{diff_text}\n\n--- code_review.md ---\n{review_text}\n"
+    document_text = (
+        f"--- commit_info ---\n{commit_info_text}\n\n"
+        f"--- summary ---\n{summary_text}\n\n"
+        f"--- code_review.md ---\n{review_text}\n\n"
+        f"--- diff.patch ---\n{diff_text}\n"
+    )
 
     print(f"Sending summary request to Gemini API ({model_name})...")
     
