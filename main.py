@@ -43,21 +43,21 @@ class ReviewDashboard:
         # Hide cursor
         sys.stdout.write("\033[?25l")
         sys.stdout.flush()
-        
+
         while self.active:
             with self.lock:
                 if not self.agent_states:
                     continue
-                    
+
                 # Move cursor up to the top of the dashboard
                 num_agents = len(self.agent_states)
                 sys.stdout.write(f"\033[{num_agents + 2}A")
-                
+
                 print("-" * 40 + "\033[K")
                 for name in sorted(self.agent_states.keys()):
                     state = self.agent_states[name]
                     status = state['status']
-                    
+
                     if status == 'Running':
                         # Calculate elapsed time dynamically for Running state
                         current_elapsed = time.time() - state.get('start_time', time.time())
@@ -70,7 +70,7 @@ class ReviewDashboard:
                         print(f"[ ] {name:<20} | {status}\033[K")
                 print("-" * 40 + "\033[K")
             time.sleep(0.2)
-            
+
         # Restore cursor
         sys.stdout.write("\033[?25h")
         sys.stdout.flush()
@@ -91,9 +91,11 @@ def main():
     parser = argparse.ArgumentParser(description="Automated LLM-based Code Review System")
     parser.add_argument("url", help="Gerrit CL URL or numeric ID")
     parser.add_argument("--out-dir", type=str, help="Directory to save files (defaults to CL ID)")
-    parser.add_argument("--model", type=str, default="gemini-3-flash-preview", 
+    parser.add_argument("--model", type=str, default="gemini-3-flash-preview",
                         help="The Gemini model to use for analysis and review (default: gemini-3-flash-preview)")
-    
+    parser.add_argument("--mock", action="store_true",
+                        help="Use mock agents and gemini-2.5-flash-lite for faster testing")
+
     args = parser.parse_args()
 
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -109,7 +111,14 @@ def main():
 
     output_dir = Path(args.out_dir) if args.out_dir else Path(cl_id)
     gemini_client = GeminiClient(api_key=api_key)
-    model_name = args.model
+
+    if args.mock:
+        model_name = "gemini-3.1-flash-lite-preview"
+        agents_dir = Path(__file__).parent / "mock_agents"
+        print("Running in MOCK mode (gemini-3.1-flash-lite-preview, mock_agents)")
+    else:
+        model_name = args.model
+        agents_dir = Path(__file__).parent / "agents"
 
     try:
         # Step 1: Fetch Change
@@ -119,7 +128,7 @@ def main():
         # Step 2: Analyze Context
         print_header(f"Analyzing Context ({model_name})")
         analysis = analyze_context(output_dir, gemini_client, model_name)
-        
+
         if not analysis:
             print("Failed to analyze context. Aborting.")
             sys.exit(1)
@@ -130,23 +139,23 @@ def main():
 
         # Step 4: Perform Review
         print_header(f"Performing Multi-Agent Code Review ({model_name})")
-        
+
         # Count agents to allocate dashboard space
-        agents_dir = Path(__file__).parent / "agents"
         num_agents = len(list(agents_dir.glob("*.md"))) if agents_dir.is_dir() else 0
-        
+
         if num_agents == 0:
-            print("No agents found. Skipping review.")
+            print(f"No agents found in {agents_dir.name}. Skipping review.")
             sys.exit(0)
 
         dashboard = ReviewDashboard()
         dashboard.start(num_agents)
 
         run_review(
-            cl_dir=output_dir, 
-            gemini_client=gemini_client, 
+            cl_dir=output_dir,
+            gemini_client=gemini_client,
             model_name=model_name,
-            status_callback=dashboard.update_status
+            status_callback=dashboard.update_status,
+            agents_dir=agents_dir
         )
 
         dashboard.stop()

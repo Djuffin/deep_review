@@ -80,19 +80,22 @@ class GerritClient:
         endpoint = f"{change_id}/revisions/current/files/{encoded_path}/content?parent=1"
         return self.get_base64_file(endpoint)
 
-    def fetch_gitiles_directory(self, project: str, commit_id: str, dir_path: str) -> Dict[str, Any]:
+    def fetch_gitiles_directory(self, project: str, commit_id: str, dir_path: str, gitiles_commit_url: str = "") -> Dict[str, Any]:
         """
         Fetches the contents of a directory using the Gitiles REST API.
         dir_path should be empty string for root, or a path like 'src/main'.
         """
-        # Gitiles API uses a different base URL structure
-        encoded_project = urllib.parse.quote(project, safe='')
         encoded_dir = urllib.parse.quote(dir_path, safe='') if dir_path else ""
+        # Important: Gitiles requires a trailing slash to return the directory entries 
+        # instead of just returning the commit info for the root.
+        path_suffix = f"/{encoded_dir}/" if encoded_dir else "/"
         
-        # Construct the gitiles URL. 
-        # Format: https://{host}/plugins/gitiles/{project}/+/{commit_id}/{dir_path}?format=JSON
-        path_suffix = f"/{encoded_dir}" if encoded_dir else ""
-        url = f"https://{self.host}/plugins/gitiles/{encoded_project}/+/{commit_id}{path_suffix}?format=JSON"
+        if gitiles_commit_url:
+            url = f"{gitiles_commit_url.rstrip('/')}{path_suffix}?format=JSON"
+        else:
+            # Fallback to Gerrit plugin path if no Gitiles link is provided
+            encoded_project = urllib.parse.quote(project, safe='')
+            url = f"https://{self.host}/plugins/gitiles/{encoded_project}/+/{commit_id}{path_suffix}?format=JSON"
         
         req = urllib.request.Request(url)
         try:

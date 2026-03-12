@@ -45,13 +45,12 @@ def _run_single_agent(
         return AgentReview(agent_name=agent_name, response_text=None, status="Failed", error_message=str(e))
 
 
-def run_review(cl_dir: Path, gemini_client: GeminiClient, model_name: str, status_callback: Callable[[str, str, float], None]) -> None:
+def run_review(cl_dir: Path, gemini_client: GeminiClient, model_name: str, status_callback: Callable[[str, str, float], None], agents_dir: Path) -> None:
     """
     Orchestrates the multi-agent code review process.
     Uses status_callback(agent_name, status, elapsed_time) to report progress to the UI.
     """
     # 1. Read the agents
-    agents_dir = Path(__file__).parent.parent / "agents"
     agents: List[tuple[str, str]] = []
     
     if agents_dir.is_dir():

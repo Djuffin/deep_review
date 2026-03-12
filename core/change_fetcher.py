@@ -131,7 +131,7 @@ def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
     
     for dir_path in sorted(list(target_dirs)):
         try:
-            dir_data = client.fetch_gitiles_directory(project, commit_id, dir_path)
+            dir_data = client.fetch_gitiles_directory(project, commit_id, dir_path, gitiles_commit_url=change_info.gitiles_link)
             entries = dir_data.get("entries", [])
             for entry in entries:
                 if entry.get("type") == "blob":
