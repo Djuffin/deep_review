@@ -1,4 +1,4 @@
-    1. **Review logic of the code:** Focus on:
+1. **Review logic of the code:** Focus on:
         - **Algorithmic Correctness:** Does the implementation actually fulfill the requirements? Are there any logical leaps or flaws?
         - **Edge Cases & Boundaries:** What happens with zero-values, empty collections, extremely large inputs, or unexpected null states?
         - **State Management:** If the code manages state, are the transitions logical? Is it possible to get stuck in an invalid state?
