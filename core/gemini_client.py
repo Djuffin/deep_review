@@ -16,7 +16,7 @@ class GeminiClient:
         self.api_key = api_key
         self.base_url = "https://generativelanguage.googleapis.com/v1beta"
 
-    def _make_request(self, endpoint: str, data: Optional[Dict[str, Any]] = None, method: str = 'POST') -> Dict[str, Any]:
+    def _make_request(self, endpoint: str, data: Optional[Dict[str, Any]] = None, method: str = 'POST', timeout: int = 600) -> Dict[str, Any]:
         url = f"{self.base_url}/{endpoint}?key={self.api_key}"
         headers = {"Content-Type": "application/json"}
         
@@ -24,7 +24,7 @@ class GeminiClient:
         req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
         
         try:
-            with urllib.request.urlopen(req) as response:
+            with urllib.request.urlopen(req, timeout=timeout) as response:
                 if response.getcode() == 204: # No content (e.g. for DELETE)
                     return {}
                 return json.loads(response.read().decode('utf-8'))
@@ -75,7 +75,8 @@ class GeminiClient:
         prompt: str, 
         document_text: Optional[str] = None, 
         cache_name: Optional[str] = None,
-        temperature: float = 0.2
+        temperature: float = 0.2,
+        timeout: int = 600
     ) -> Optional[str]:
         """
         Generates content from the model. Can use either a cached context or direct document text.
@@ -99,7 +100,7 @@ class GeminiClient:
         endpoint = f"models/{model_name}:generateContent"
         
         try:
-            result = self._make_request(endpoint, data=data)
+            result = self._make_request(endpoint, data=data, timeout=timeout)
             
             # Extract text
             try:

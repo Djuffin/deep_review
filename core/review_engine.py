@@ -30,7 +30,8 @@ def _run_single_agent(
             model_name=model_name,
             prompt=prompt,
             document_text=document_text if not cache_name else None,
-            cache_name=cache_name
+            cache_name=cache_name,
+            timeout=300
         )
         
         if response_text:
