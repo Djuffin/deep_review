@@ -95,7 +95,7 @@ def main():
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview",
                         help="The Gemini model to use for analysis and review (default: gemini-3-flash-preview)")
     parser.add_argument("--mock", action="store_true",
-                        help="Use mock agents and gemini-2.5-flash-lite for faster testing")
+                        help="Use mock agents and gemini-3.1-flash-lite-preview for faster testing")
 
     args = parser.parse_args()
 

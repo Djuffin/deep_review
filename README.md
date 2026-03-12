@@ -16,7 +16,7 @@ Unlike basic AI diff-checkers, DeepReview automatically discovers and fetches mi
    python3 main.py https://chromium-review.googlesource.com/c/chromium/src/+/7219003
    ```
 
-3. Read the generated `code_review.md` inside the output directory.
+3. Read the generated `final_summary.md` and `code_review.md` inside the output directory.
 
 ## How It Works
 
@@ -45,5 +45,5 @@ options:
   -h, --help         show this help message and exit
   --out-dir OUT_DIR  Directory to save files (defaults to CL ID)
   --model MODEL      The Gemini model to use for analysis and review (default: gemini-3-flash-preview)
-  --mock             Use mock agents and gemini-2.5-flash-lite for faster testing
+  --mock             Use mock agents and gemini-3.1-flash-lite-preview for faster testing
 ```
