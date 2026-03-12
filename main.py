@@ -130,24 +130,7 @@ def main():
         print_header(f"Fetching Change {cl_id}")
         change_info = fetch_change(args.url, output_dir)
 
-        # Step 2: Analyze Context
-        print_header(f"Analyzing Context ({model_name})")
-        analysis = analyze_context(output_dir, gemini_client, model_name, agents_dir)
-
-        if not analysis:
-            print("Failed to analyze context. Aborting.")
-            sys.exit(1)
-            
-        # Clean up project_tree so it doesn't pollute the review context
-        project_tree_path = output_dir / "project_tree"
-        if project_tree_path.exists():
-            project_tree_path.unlink()
-
-        # Step 3: Fetch Extra Context
-        print_header("Loading Extra Context")
-        fetch_extra_context(output_dir, change_info, analysis)
-
-        # Step 4: Perform Review
+        # Step 2: Perform Review
         print_header(f"Performing Multi-Agent Code Review ({model_name})")
 
         # Count agents to allocate dashboard space
@@ -162,6 +145,7 @@ def main():
 
         run_review(
             cl_dir=output_dir,
+            change_info=change_info,
             gemini_client=gemini_client,
             model_name=model_name,
             status_callback=dashboard.update_status,
@@ -170,7 +154,7 @@ def main():
 
         dashboard.stop()
 
-        # Step 5: Summarize Reviews
+        # Step 3: Summarize Reviews
         print_header(f"Consolidating Final Review ({model_name})")
         final_summary = summarize_reviews(cl_dir=output_dir, gemini_client=gemini_client, model_name=model_name)
 
