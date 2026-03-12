@@ -79,3 +79,33 @@ class GerritClient:
         encoded_path = urllib.parse.quote(file_path, safe='')
         endpoint = f"{change_id}/revisions/current/files/{encoded_path}/content?parent=1"
         return self.get_base64_file(endpoint)
+
+    def fetch_gitiles_directory(self, project: str, commit_id: str, dir_path: str) -> Dict[str, Any]:
+        """
+        Fetches the contents of a directory using the Gitiles REST API.
+        dir_path should be empty string for root, or a path like 'src/main'.
+        """
+        # Gitiles API uses a different base URL structure
+        encoded_project = urllib.parse.quote(project, safe='')
+        encoded_dir = urllib.parse.quote(dir_path, safe='') if dir_path else ""
+        
+        # Construct the gitiles URL. 
+        # Format: https://{host}/plugins/gitiles/{project}/+/{commit_id}/{dir_path}?format=JSON
+        path_suffix = f"/{encoded_dir}" if encoded_dir else ""
+        url = f"https://{self.host}/plugins/gitiles/{encoded_project}/+/{commit_id}{path_suffix}?format=JSON"
+        
+        req = urllib.request.Request(url)
+        try:
+            with urllib.request.urlopen(req) as response:
+                raw_bytes = response.read()
+                data_str = raw_bytes.decode('utf-8')
+                if data_str.startswith(")]}'"):
+                    data_str = data_str[4:]
+                return json.loads(data_str)
+        except urllib.error.HTTPError as e:
+            # It's normal for some directories to not exist in older commits or if we guessed a path incorrectly
+            if e.code == 404:
+                return {"entries": []}
+            raise GerritAPIError(f"HTTP Error fetching {url}", status_code=e.code, details=e.reason)
+        except Exception as e:
+            raise GerritAPIError(f"Failed to fetch {url}: {e}")

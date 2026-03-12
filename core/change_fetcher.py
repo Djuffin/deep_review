@@ -102,14 +102,48 @@ def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
     # Fetch changed files
     print("Fetching original file contents...")
     files_data = client.fetch_changed_files(change_id)
+    modified_files = []
+    
     for file_path in files_data.keys():
         if file_path == "/COMMIT_MSG":
             continue
+        modified_files.append(file_path)
         try:
             original_bytes = client.fetch_original_file(change_id, file_path)
             save_file(output_dir / file_path, original_bytes)
             print(f"- Saved: {output_dir / file_path}")
         except Exception as e:
             print(f"- Failed to fetch original file '{file_path}' (may be a new file): {e}")
+
+    # Discover and save project tree
+    print("Discovering project tree context...")
+    target_dirs = set([""]) # Always include root
+    
+    for file_path in modified_files:
+        parts = file_path.split('/')
+        # Add all parent directories up to root
+        for i in range(len(parts)):
+            dir_path = "/".join(parts[:i])
+            target_dirs.add(dir_path)
+            
+    tree_files = set()
+    commit_id = current_rev if current_rev else "HEAD"
+    
+    for dir_path in sorted(list(target_dirs)):
+        try:
+            dir_data = client.fetch_gitiles_directory(project, commit_id, dir_path)
+            entries = dir_data.get("entries", [])
+            for entry in entries:
+                if entry.get("type") == "blob":
+                    file_name = entry.get("name")
+                    full_path = f"{dir_path}/{file_name}" if dir_path else file_name
+                    tree_files.add(full_path)
+        except Exception as e:
+            print(f"- Warning: Could not fetch directory listing for '{dir_path}': {e}")
+            
+    if tree_files:
+        tree_content = "Project files near the changed files:\n\n" + "\n".join(sorted(list(tree_files))) + "\n"
+        save_file(output_dir / "project_tree", tree_content)
+        print(f"Saved project tree context with {len(tree_files)} files to: {output_dir / 'project_tree'}")
 
     return change_info
