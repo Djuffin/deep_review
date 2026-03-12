@@ -12,10 +12,10 @@ from pathlib import Path
 
 from core.gemini_client import GeminiClient
 from core.change_fetcher import fetch_change, parse_gerrit_url
-from core.context_analyzer import analyze_context
-from core.extra_context_fetcher import fetch_extra_context
+from core.local_provider import is_local_repo, fetch_local_change
 from core.review_engine import run_review
 from core.review_summarizer import summarize_reviews
+from core.utils import save_file
 
 def print_header(title: str):
     print(f"\n{'='*50}")
@@ -90,7 +90,7 @@ class ReviewDashboard:
 
 def main():
     parser = argparse.ArgumentParser(description="Automated LLM-based Code Review System")
-    parser.add_argument("url", help="Gerrit CL URL or numeric ID")
+    parser.add_argument("url", help="Gerrit CL URL, numeric ID, or local repo path")
     parser.add_argument("--out-dir", type=str, help="Directory to save files (defaults to CL ID)")
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview",
                         help="The Gemini model to use for analysis and review (default: gemini-3-flash-preview)")
@@ -104,11 +104,17 @@ def main():
         print("Error: GEMINI_API_KEY environment variable not set.")
         sys.exit(1)
 
-    try:
-        _, cl_id = parse_gerrit_url(args.url)
-    except ValueError as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+    is_local = is_local_repo(args.url)
+    
+    if is_local:
+        cl_id = "local"
+        host = "local"
+    else:
+        try:
+            host, cl_id = parse_gerrit_url(args.url)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
 
     output_dir = Path(args.out_dir) if args.out_dir else Path(cl_id)
     if output_dir.exists():
@@ -127,8 +133,22 @@ def main():
 
     try:
         # Step 1: Fetch Change
-        print_header(f"Fetching Change {cl_id}")
-        change_info = fetch_change(args.url, output_dir)
+        if is_local:
+            print_header(f"Loading Local Repo: {args.url}")
+            repo_path = Path(args.url).expanduser().resolve()
+            change_info, diff_text, project_tree = fetch_local_change(repo_path)
+            
+            # Extract the command from the message to print it to the user
+            diff_cmd_line = change_info.message.split('\n')[0]
+            print(f"[*] {diff_cmd_line}")
+            
+            output_dir.mkdir(parents=True, exist_ok=True)
+            save_file(output_dir / "diff.patch", diff_text)
+            save_file(output_dir / "project_tree", project_tree)
+            save_file(output_dir / "commit_info", f"Local Repo: {repo_path}\nSubject: {change_info.subject}\n\n{change_info.message}")
+        else:
+            print_header(f"Fetching Change {cl_id}")
+            change_info = fetch_change(args.url, output_dir)
 
         # Step 2: Perform Review
         print_header(f"Performing Multi-Agent Code Review ({model_name})")
@@ -169,6 +189,9 @@ def main():
 
     except Exception as e:
         print(f"\n[!] Pipeline failed: {e}")
+        # print stack trace for debugging
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 if __name__ == "__main__":

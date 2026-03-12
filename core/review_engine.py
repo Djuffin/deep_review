@@ -58,7 +58,10 @@ def _create_logger(cl_dir: Path) -> Callable[[str], None]:
 
 def create_tool_handlers(change_info: ChangeInfo, cl_dir: Path, gemini_client: GeminiClient, logger: Callable[[str], None]) -> Dict[str, Callable]:
     """Creates the implementation for the tools available to the agents."""
-    gerrit_client = GerritClient(change_info.host, logger=logger)
+    is_local = change_info.host == "local"
+    repo_path = Path(change_info.gitiles_link) if is_local else None
+    
+    gerrit_client = None if is_local else GerritClient(change_info.host, logger=logger)
     cl_id = change_info.cl_id
     
     # Memoization cache: (file_path, function_name) -> code string
@@ -67,6 +70,16 @@ def create_tool_handlers(change_info: ChangeInfo, cl_dir: Path, gemini_client: G
 
     def get_file_content(file_path: str) -> str:
         """Helper to fetch a full file content (internal only)."""
+        # If local mode, read directly from the repo
+        if is_local:
+            full_path = repo_path / file_path
+            try:
+                with open(full_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except Exception as e:
+                return f"Error reading local file: {e}"
+
+        # Otherwise, use the Gerrit/Temp cache logic
         local_path = cl_dir / file_path
         if local_path.exists():
             try:
