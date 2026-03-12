@@ -129,6 +129,14 @@ def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
     tree_files = set()
     commit_id = current_rev if current_rev else "HEAD"
     
+    try:
+        root_data = client.fetch_gitiles_directory(project, commit_id, "", gitiles_commit_url=change_info.gitiles_link)
+        for entry in root_data.get("entries", []):
+            if entry.get("type") == "tree":
+                target_dirs.add(entry.get("name"))
+    except Exception as e:
+        print(f"- Warning: Could not fetch root directory for subfolders: {e}")
+
     for dir_path in sorted(list(target_dirs)):
         try:
             dir_data = client.fetch_gitiles_directory(project, commit_id, dir_path, gitiles_commit_url=change_info.gitiles_link)
