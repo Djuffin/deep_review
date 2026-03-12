@@ -8,18 +8,19 @@ import base64
 import urllib.parse
 import urllib.request
 import urllib.error
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Callable
 
 from core.exceptions import GerritAPIError, ParseError
 
 class GerritClient:
-    def __init__(self, host: str):
+    def __init__(self, host: str, logger: Optional[Callable[[str], None]] = None):
         """
         Initializes the client.
         :param host: e.g., 'chromium-review.googlesource.com'
         """
         self.host = host
         self.base_url = f"https://{self.host}/changes"
+        self.logger = logger
 
     def _make_request(self, endpoint: str) -> bytes:
         """Helper to make a raw GET request to the Gerrit API."""
@@ -27,18 +28,27 @@ class GerritClient:
 
         req = urllib.request.Request(url)
         max_retries = 5
+        timeout = 60 # 60 second timeout for Gerrit
         for attempt in range(max_retries):
             try:
-                with urllib.request.urlopen(req) as response:
+                if self.logger:
+                    self.logger(f"  [Gerrit Request] GET {url} (Attempt {attempt+1}/{max_retries})")
+                with urllib.request.urlopen(req, timeout=timeout) as response:
                     return response.read()
             except urllib.error.HTTPError as e:
                 if e.code == 429 and attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    delay = 2 ** attempt
+                    if self.logger:
+                        self.logger(f"  [Gerrit 429] Retrying in {delay}s...")
+                    time.sleep(delay)
                     continue
                 raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
             except Exception as e:
                 if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    delay = 2 ** attempt
+                    if self.logger:
+                        self.logger(f"  [Gerrit Error] {e}. Retrying in {delay}s...")
+                    time.sleep(delay)
                     continue
                 raise GerritAPIError(f"Failed to fetch {url}: {e}")
 

@@ -17,13 +17,22 @@ def save_file(file_path: Path, content: str | bytes) -> None:
     with open(file_path, mode, encoding=encoding) as f:
         f.write(content)
 
-def read_directory_context(cl_dir: Path, max_lines: int = 5000) -> str:
+def read_directory_context(cl_dir: Path, max_lines: int = 5000, core_only: bool = False) -> str:
     """
-    Reads all text files in a directory to build a combined context string.
+    Reads files in a directory to build a combined context string.
     Ensures that 'diff.patch' and 'summary' are placed at the very end.
     Skips binary files or files exceeding max_lines.
     """
     contents = []
+    
+    if core_only:
+        core_files = ["commit_info", "summary", "project_tree", "diff.patch"]
+        for filename in core_files:
+            file_path = cl_dir / filename
+            if file_path.exists():
+                _append_file_content(file_path, contents, max_lines)
+        return "\n".join(contents)
+        
     delayed_files: List[Path] = []
     
     # Files to ignore completely
