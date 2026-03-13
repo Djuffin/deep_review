@@ -17,7 +17,7 @@ def save_file(file_path: Path, content: str | bytes) -> None:
     with open(file_path, mode, encoding=encoding) as f:
         f.write(content)
 
-def read_directory_context(cl_dir: Path, max_lines: int = 5000) -> str:
+def read_directory_context(cl_dir: Path, max_lines: int = 10000) -> str:
     """
     Reads all text files in a directory to build a combined context string.
     Ensures that 'diff.patch' and 'summary' are placed at the very end.
