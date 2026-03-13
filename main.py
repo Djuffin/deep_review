@@ -94,8 +94,8 @@ def main():
     parser.add_argument("--out-dir", type=str, help="Directory to save files (defaults to CL ID)")
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview",
                         help="The Gemini model to use for analysis and review (default: gemini-3-flash-preview)")
-    parser.add_argument("--mock", action="store_true",
-                        help="Use mock agents and gemini-3.1-flash-lite-preview for faster testing")
+    parser.add_argument("--persona", action="store_true",
+                        help="Use famous programmer personas for review (e.g., Linus Torvalds, James Gosling)")
 
     args = parser.parse_args()
 
@@ -118,9 +118,9 @@ def main():
     gemini_client = GeminiClient(api_key=api_key)
     model_name = args.model
 
-    if args.mock:
-        agents_dir = Path(__file__).parent / "mock_agents"
-        print(f"Running in MOCK mode ({model_name}, mock_agents)")
+    if args.persona:
+        agents_dir = Path(__file__).parent / "persona_agents"
+        print(f"Running in PERSONA mode ({model_name}, persona_agents)")
     else:
         agents_dir = Path(__file__).parent / "agents"
 
