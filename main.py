@@ -116,13 +116,12 @@ def main():
         shutil.rmtree(output_dir)
 
     gemini_client = GeminiClient(api_key=api_key)
+    model_name = args.model
 
     if args.mock:
-        model_name = "gemini-3.1-flash-lite-preview"
         agents_dir = Path(__file__).parent / "mock_agents"
-        print("Running in MOCK mode (gemini-3.1-flash-lite-preview, mock_agents)")
+        print(f"Running in MOCK mode ({model_name}, mock_agents)")
     else:
-        model_name = args.model
         agents_dir = Path(__file__).parent / "agents"
 
     try:
