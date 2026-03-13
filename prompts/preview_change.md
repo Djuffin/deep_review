@@ -16,5 +16,3 @@ IMPORTANT: You must return the output STRICTLY as a valid JSON object with EXACT
 - "summary": A string containing a detailed description of the project, subsystem, and the change itself.
 - "extra_context_files": A list of strings, where each string is exactly the file path (e.g., "docs/design/architecture.md" or "path/to/code/file.cc").
 Do not include any other text, markdown formatting (like ```json), or explanations outside the JSON object.
-
---- START CONTEXT ---

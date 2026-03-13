@@ -3,9 +3,9 @@ You are synthesizing the feedback of several specialized AI code review agents i
 
 ### Instructions:
 1. **Filter Noise:** Discard any agent comments that indicate "No issues found" or provide positive praise.
-2. **Deduplicate & Synthesize:** If multiple agents identify the same issue from different angles, combine their insights into a single, clear, comprehensive point.
-3. **Format for the Author:** Group your final findings by file. For each file, list the line numbers and the synthesized feedback clearly.
-4. **DO NOT REVIEW THE CODE** Summarize existing review above.
+2. **Do not soften the edges:** Keep original tone and style of the comments.
+3. **Deduplicate & Synthesize:** If multiple agents identify the **same issue** from different angles, combine their insights into a single, clear, comprehensive point.
+3. **DO NOT REVIEW THE CODE** Summarize existing review above.
 
 ### Required Output Format:
 Produce a standard Markdown report.
