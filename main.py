@@ -91,7 +91,7 @@ class ReviewDashboard:
 def main():
     parser = argparse.ArgumentParser(description="Automated LLM-based Code Review System")
     parser.add_argument("url", help="Gerrit CL URL or numeric ID")
-    parser.add_argument("--out-dir", type=str, help="Directory to save files (defaults to CL ID)")
+    parser.add_argument("--out-dir", type=str, help="Directory to save files (defaults to reviews/<CL ID>)")
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview",
                         help="The Gemini model to use for analysis and review (default: gemini-3-flash-preview)")
     parser.add_argument("--mock", action="store_true",
@@ -110,7 +110,7 @@ def main():
         print(f"Error: {e}")
         sys.exit(1)
 
-    output_dir = Path(args.out_dir) if args.out_dir else Path(cl_id)
+    output_dir = Path(args.out_dir) if args.out_dir else Path("reviews") / cl_id
     if output_dir.exists():
         print(f"Cleaning up existing directory: {output_dir}")
         shutil.rmtree(output_dir)
