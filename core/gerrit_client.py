@@ -135,4 +135,72 @@ class GerritClient:
                     continue
                 raise GerritAPIError(f"Failed to fetch {url}: {e}")
 
+    def fetch_file_history(self, project: str, commit_id: str, file_path: str, gitiles_commit_url: str = "", limit: int = 5) -> Dict[str, Any]:
+        """Fetches the commit history for a specific file via Gitiles."""
+        encoded_path = urllib.parse.quote(file_path, safe='')
+        
+        if gitiles_commit_url:
+            # gitiles_commit_url usually looks like: https://host/project/+/commit_id
+            # We need to replace the /+/commit_id part with /+log/commit_id/path
+            base_url = gitiles_commit_url.split('/+/')[0]
+            url = f"{base_url}/+log/{commit_id}/{encoded_path}?format=JSON&n={limit}"
+        else:
+            encoded_project = urllib.parse.quote(project, safe='')
+            url = f"https://{self.host}/plugins/gitiles/{encoded_project}/+log/{commit_id}/{encoded_path}?format=JSON&n={limit}"
+
+        req = urllib.request.Request(url)
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                with urllib.request.urlopen(req) as response:
+                    raw_bytes = response.read()
+                    data_str = raw_bytes.decode('utf-8')
+                    if data_str.startswith(")]}'"):
+                        data_str = data_str[4:]
+                    return json.loads(data_str)
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    return {"log": []}
+                if e.code == 429 and attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise GerritAPIError(f"Failed to fetch {url}: {e}")
+
+    def fetch_commit_details(self, project: str, commit_id: str, gitiles_commit_url: str = "") -> Dict[str, Any]:
+        """Fetches details of a specific commit via Gitiles, including the tree_diff."""
+        if gitiles_commit_url:
+            base_url = gitiles_commit_url.split('/+/')[0]
+            url = f"{base_url}/+/{commit_id}?format=JSON"
+        else:
+            encoded_project = urllib.parse.quote(project, safe='')
+            url = f"https://{self.host}/plugins/gitiles/{encoded_project}/+/{commit_id}?format=JSON"
+
+        req = urllib.request.Request(url)
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                with urllib.request.urlopen(req) as response:
+                    raw_bytes = response.read()
+                    data_str = raw_bytes.decode('utf-8')
+                    if data_str.startswith(")]}'"):
+                        data_str = data_str[4:]
+                    return json.loads(data_str)
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    return {}
+                if e.code == 429 and attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                raise GerritAPIError(f"Failed to fetch {url}: {e}")
+
 

@@ -21,22 +21,22 @@ def parse_gerrit_url(url: str) -> tuple[str, str]:
 
 def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
     """
-    Fetches change metadata, the patch diff, and the original files 
+    Fetches change metadata, the patch diff, and the original files
     for a given Gerrit URL, saving them to output_dir.
     """
     host, change_id = parse_gerrit_url(url)
     client = GerritClient(host)
-    
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     print("Fetching change info...")
     info_json = client.fetch_change_info(change_id)
-    
+
     project = info_json.get("project", "")
     numeric_id = info_json.get("_number", change_id)
     current_rev = info_json.get("current_revision", "")
     commit_url = f"https://{host}/c/{project}/+/{numeric_id}"
-    
+
     gitiles_link = ""
     patch_set_num = "UNKNOWN"
     subject = "UNKNOWN"
@@ -75,7 +75,7 @@ def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
         commit_url=commit_url,
         gitiles_link=gitiles_link
     )
-    
+
     # Save commit_info
     commit_info_content = (
         f"Commit URL: {change_info.commit_url}\n"
@@ -103,7 +103,7 @@ def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
     print("Fetching original file contents...")
     files_data = client.fetch_changed_files(change_id)
     modified_files = []
-    
+
     for file_path in files_data.keys():
         if file_path == "/COMMIT_MSG":
             continue
@@ -115,36 +115,74 @@ def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
         except Exception as e:
             print(f"- Failed to fetch original file '{file_path}' (may be a new file): {e}")
 
+    # Discover temporally coupled files
+    print("Discovering temporally coupled files...")
+    commit_id = current_rev if current_rev else "HEAD"
+    historically_coupled_files = set()
+    coupled_directories = set()
+
+    for file_path in modified_files:
+        try:
+            history_data = client.fetch_file_history(project, commit_id, file_path, gitiles_commit_url=change_info.gitiles_link, limit=10)
+            commits = history_data.get("log", [])
+            for commit_entry in commits:
+                hist_commit_id = commit_entry.get("commit")
+                if hist_commit_id:
+                    commit_details = client.fetch_commit_details(project, hist_commit_id, gitiles_commit_url=change_info.gitiles_link)
+                    tree_diff = commit_details.get("tree_diff", [])
+
+                    if len(tree_diff) > 30:
+                        print(f"    - Skipping bulk commit {hist_commit_id} ({len(tree_diff)} files changed)")
+                        continue
+
+                    for diff_entry in tree_diff:
+                        old_path = diff_entry.get("old_path")
+                        new_path = diff_entry.get("new_path")
+
+                        if old_path and old_path != "/dev/null" and old_path not in modified_files:
+                            historically_coupled_files.add(old_path)
+                            coupled_directories.add(str(Path(old_path).parent))
+                        if new_path and new_path != "/dev/null" and new_path not in modified_files:
+                            historically_coupled_files.add(new_path)
+                            coupled_directories.add(str(Path(new_path).parent))
+        except Exception as e:
+            print(f"- Warning: Could not fetch history for '{file_path}': {e}")
+
+    # Clean up coupled directories (e.g. '.' becomes '')
+    clean_coupled_dirs = set()
+    for d in coupled_directories:
+        clean_d = d if d != "." else ""
+        clean_coupled_dirs.add(clean_d)
+
+    if historically_coupled_files:
+        coupled_content = "Historically Related Files (modified together in the last commits):\n\n" + "\n".join(sorted(list(historically_coupled_files))) + "\n"
+        save_file(output_dir / "historically_coupled_files", coupled_content)
+        print(f"Saved {len(historically_coupled_files)} temporally coupled files to: {output_dir / 'historically_coupled_files'}")
+
     # Discover and save project tree
     print("Discovering project tree context...")
-    
+
     deep_dirs = set()
     for file_path in modified_files:
         parts = file_path.split('/')
         if len(parts) > 1:
             deep_dirs.add("/".join(parts[:-1]))
-            
-    shallow_dirs = set([""]) # Always include root
-    
+
+    shallow_dirs = set()
+
     for dir_path in deep_dirs:
         parts = dir_path.split('/')
         for i in range(1, len(parts)):
             shallow_dirs.add("/".join(parts[:i]))
-            
+
+    # Add directories of temporally coupled files
+    shallow_dirs.update(clean_coupled_dirs)
+
     tree_files = set()
     commit_id = current_rev if current_rev else "HEAD"
-    
-    try:
-        root_data = client.fetch_gitiles_directory(project, commit_id, "", gitiles_commit_url=change_info.gitiles_link)
-        for entry in root_data.get("entries", []):
-            if entry.get("type") == "tree":
-                shallow_dirs.add(entry.get("name"))
-    except Exception as e:
-        print(f"- Warning: Could not fetch root directory for subfolders: {e}")
 
     # Remove deep_dirs from shallow_dirs to avoid duplicate fetches
     shallow_dirs = shallow_dirs - deep_dirs
-    shallow_dirs.add("")
 
     for dir_path in sorted(list(shallow_dirs)):
         print(f"  Fetching shallow directory: '{dir_path}'")
@@ -158,7 +196,7 @@ def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
                     tree_files.add(full_path)
         except Exception as e:
             print(f"- Warning: Could not fetch directory listing for '{dir_path}': {e}")
-            
+
     for dir_path in sorted(list(deep_dirs)):
         if not dir_path:
             continue
@@ -176,6 +214,10 @@ def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
 
     if tree_files:
         tree_content = "Project files near the changed files:\n\n" + "\n".join(sorted(list(tree_files))) + "\n"
+
+        if historically_coupled_files:
+            tree_content += "\nHistorically Related Files (modified together in the last 5 commits):\n\n" + "\n".join(sorted(list(historically_coupled_files))) + "\n"
+
         save_file(output_dir / "project_tree", tree_content)
         print(f"Saved project tree context with {len(tree_files)} files to: {output_dir / 'project_tree'}")
 
