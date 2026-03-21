@@ -5,58 +5,94 @@ Gerrit API client.
 import json
 import time
 import base64
+import random
 import urllib.parse
 import urllib.request
 import urllib.error
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from core.exceptions import GerritAPIError, ParseError
 
 class GerritClient:
-    def __init__(self, host: str):
+    def __init__(self, host: str, min_delay_seconds: float = 0.2):
         """
         Initializes the client.
         :param host: e.g., 'chromium-review.googlesource.com'
+        :param min_delay_seconds: Minimum time to wait between API requests.
         """
         self.host = host
         self.base_url = f"https://{self.host}/changes"
+        self.min_delay_seconds = min_delay_seconds
+        self._last_request_time = 0.0
 
-    def _make_request(self, endpoint: str) -> bytes:
-        """Helper to make a raw GET request to the Gerrit API."""
-        url = f"{self.base_url}/{endpoint}"
-
+    def _execute_request(self, url: str) -> bytes:
+        """Helper to make a raw GET request with proactive throttling and retries."""
         req = urllib.request.Request(url)
         max_retries = 5
+        
         for attempt in range(max_retries):
+            # Proactive throttling
+            now = time.time()
+            time_since_last = now - self._last_request_time
+            if time_since_last < self.min_delay_seconds:
+                time.sleep(self.min_delay_seconds - time_since_last)
+            
+            self._last_request_time = time.time()
+
             try:
                 with urllib.request.urlopen(req) as response:
                     return response.read()
             except urllib.error.HTTPError as e:
                 if e.code == 429 and attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    retry_after = e.headers.get('Retry-After')
+                    if retry_after and retry_after.isdigit():
+                        sleep_time = int(retry_after)
+                    else:
+                        sleep_time = (2 ** attempt) + random.uniform(0, 0.5)
+                    time.sleep(sleep_time)
                     continue
-                raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
+                # If it's not 429 or we ran out of retries, re-raise the HTTPError
+                raise e
             except Exception as e:
                 if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
+                    time.sleep((2 ** attempt) + random.uniform(0, 0.5))
                     continue
                 raise GerritAPIError(f"Failed to fetch {url}: {e}")
 
-    def get_json(self, endpoint: str) -> Dict[str, Any]:
-        """
-        Fetches data from Gerrit and parses the JSON.
-        Automatically strips the XSSI magic string `)]}'`.
-        """
-        raw_bytes = self._make_request(endpoint)
+    def _make_request(self, endpoint: str) -> bytes:
+        """Helper to make a raw GET request to the Gerrit API endpoints."""
+        url = f"{self.base_url}/{endpoint}"
+        try:
+            return self._execute_request(url)
+        except urllib.error.HTTPError as e:
+            raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
+
+    def _execute_json_request(self, url: str, default_on_404: Optional[Any] = None) -> Dict[str, Any]:
+        """Executes a request and parses the JSON, handling 404s with an optional default value."""
+        try:
+            raw_bytes = self._execute_request(url)
+        except urllib.error.HTTPError as e:
+            if e.code == 404 and default_on_404 is not None:
+                return default_on_404
+            raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
+            
         try:
             data_str = raw_bytes.decode('utf-8')
             if data_str.startswith(")]}'"):
                 data_str = data_str[4:]
             return json.loads(data_str)
         except json.JSONDecodeError as e:
-            raise ParseError(f"Failed to parse JSON from Gerrit: {e}")
+            raise ParseError(f"Failed to parse JSON from {url}: {e}")
         except Exception as e:
-            raise ParseError(f"Failed to decode Gerrit response: {e}")
+            raise ParseError(f"Failed to decode response from {url}: {e}")
+
+    def get_json(self, endpoint: str) -> Dict[str, Any]:
+        """
+        Fetches data from Gerrit and parses the JSON.
+        Automatically strips the XSSI magic string `)]}'`.
+        """
+        url = f"{self.base_url}/{endpoint}"
+        return self._execute_json_request(url)
 
     def get_base64_file(self, endpoint: str) -> bytes:
         """
@@ -110,30 +146,7 @@ class GerritClient:
         if recursive:
             url += "&recursive=1"
         
-
-        req = urllib.request.Request(url)
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                with urllib.request.urlopen(req) as response:
-                    raw_bytes = response.read()
-                    data_str = raw_bytes.decode('utf-8')
-                    if data_str.startswith(")]}'"):
-                        data_str = data_str[4:]
-                    return json.loads(data_str)
-            except urllib.error.HTTPError as e:
-                # It's normal for some directories to not exist in older commits or if we guessed a path incorrectly
-                if e.code == 404:
-                    return {"entries": []}
-                if e.code == 429 and attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-                    continue
-                raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-                    continue
-                raise GerritAPIError(f"Failed to fetch {url}: {e}")
+        return self._execute_json_request(url, default_on_404={"entries": []})
 
     def fetch_file_history(self, project: str, commit_id: str, file_path: str, gitiles_commit_url: str = "", limit: int = 5) -> Dict[str, Any]:
         """Fetches the commit history for a specific file via Gitiles."""
@@ -148,28 +161,7 @@ class GerritClient:
             encoded_project = urllib.parse.quote(project, safe='')
             url = f"https://{self.host}/plugins/gitiles/{encoded_project}/+log/{commit_id}/{encoded_path}?format=JSON&n={limit}"
 
-        req = urllib.request.Request(url)
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                with urllib.request.urlopen(req) as response:
-                    raw_bytes = response.read()
-                    data_str = raw_bytes.decode('utf-8')
-                    if data_str.startswith(")]}'"):
-                        data_str = data_str[4:]
-                    return json.loads(data_str)
-            except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    return {"log": []}
-                if e.code == 429 and attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-                    continue
-                raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-                    continue
-                raise GerritAPIError(f"Failed to fetch {url}: {e}")
+        return self._execute_json_request(url, default_on_404={"log": []})
 
     def fetch_commit_details(self, project: str, commit_id: str, gitiles_commit_url: str = "") -> Dict[str, Any]:
         """Fetches details of a specific commit via Gitiles, including the tree_diff."""
@@ -180,27 +172,4 @@ class GerritClient:
             encoded_project = urllib.parse.quote(project, safe='')
             url = f"https://{self.host}/plugins/gitiles/{encoded_project}/+/{commit_id}?format=JSON"
 
-        req = urllib.request.Request(url)
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                with urllib.request.urlopen(req) as response:
-                    raw_bytes = response.read()
-                    data_str = raw_bytes.decode('utf-8')
-                    if data_str.startswith(")]}'"):
-                        data_str = data_str[4:]
-                    return json.loads(data_str)
-            except urllib.error.HTTPError as e:
-                if e.code == 404:
-                    return {}
-                if e.code == 429 and attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-                    continue
-                raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)
-                    continue
-                raise GerritAPIError(f"Failed to fetch {url}: {e}")
-
-
+        return self._execute_json_request(url, default_on_404={})
