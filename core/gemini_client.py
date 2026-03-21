@@ -45,10 +45,16 @@ class GeminiClient:
         """
         data = {
             "model": f"models/{model_name}",
-            "contents": [{
-                "parts": [{"text": document_text}],
-                "role": "user"
-            }],
+            "contents": [
+                {
+                    "parts": [{"text": document_text}],
+                    "role": "user"
+                },
+                {
+                    "parts": [{"text": "Context received. I am ready to review the changes based on this context."}],
+                    "role": "model"
+                }
+            ],
             "ttl": f"{ttl_seconds}s"
         }
         
@@ -112,6 +118,8 @@ class GeminiClient:
             
         except GeminiAPIError as e:
             print(f"Error calling Gemini API: {e}")
+            if e.details:
+                print(f"Details: {e.details}")
             return None
         except ParseError as e:
             print(f"Error parsing Gemini response: {e}")
