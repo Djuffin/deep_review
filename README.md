@@ -44,6 +44,8 @@ positional arguments:
 options:
   -h, --help         show this help message and exit
   --out-dir OUT_DIR  Directory to save files (defaults to CL ID)
-  --model MODEL      The Gemini model to use for analysis and review (default: gemini-3-flash-preview)
+  --model MODEL      The Gemini model to use for analysis and review.
+                     Acceptable values: gemini-3.1-pro-preview, gemini-3-flash-preview,
+                     gemini-3.1-flash-lite-preview (default: gemini-3-flash-preview)
   --persona          Use famous programmer personas for review (e.g., Linus Torvalds, James Gosling)
 ```
