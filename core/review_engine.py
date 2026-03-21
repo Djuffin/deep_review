@@ -11,7 +11,7 @@ from typing import List, Callable, Optional
 
 from core.gemini_client import GeminiClient
 from core.models import AgentReview
-from core.utils import read_directory_context, save_file
+from core.utils import build_review_context, save_file
 
 COMMON_AGENT_INSTRUCTION = """
 **CRITICAL INSTRUCTION:** You must analyze ONLY the code changes (the lines added or modified in the diff). Do NOT report issues, bugs, or improvements for existing code that was not modified in this changelist, even if it is provided in the context.
@@ -73,7 +73,7 @@ def run_review(cl_dir: Path, gemini_client: GeminiClient, model_name: str, statu
         return
 
     # 2. Build the context
-    document_text = read_directory_context(cl_dir)
+    document_text = build_review_context(cl_dir)
     if not document_text.strip():
         print("Error: Context is empty.")
         return

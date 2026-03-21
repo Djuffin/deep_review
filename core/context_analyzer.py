@@ -8,7 +8,7 @@ from typing import Optional
 
 from core.gemini_client import GeminiClient
 from core.models import AnalysisResult
-from core.utils import read_directory_context, save_file
+from core.utils import build_analysis_context, save_file
 from core.exceptions import ParseError
 
 def analyze_context(cl_dir: Path, gemini_client: GeminiClient, model_name: str, agents_dir: Path) -> Optional[AnalysisResult]:
@@ -17,7 +17,7 @@ def analyze_context(cl_dir: Path, gemini_client: GeminiClient, model_name: str, 
     additional context files needed for a full review.
     """
     print(f"Reading files in '{cl_dir}' for analysis...")
-    document_text = read_directory_context(cl_dir)
+    document_text = build_analysis_context(cl_dir)
 
     # Add agent prompts to context
     agent_texts = []

@@ -1,7 +1,9 @@
 Please analyze this code change based on the provided files.
 
 1. **Identify the Project & Broad Context:** First, determine which software project this change belongs to based on the file paths, commit info, or code content (e.g., Chromium, Android, V8).
-2. **Create a Summary:** Provide a detailed summary of the change. Your summary MUST begin with a high-level description of the project itself and the specific subsystem being modified, followed by a detailed explanation of the change and its core logic.
+2. **Create a Summary:** Provide a detailed summary of the change. Your summary MUST begin with a high-level description of the project itself
+     and the specific subsystem being modified, followed by a detailed explanation of the change and its core logic.
+     Image that you write a detailed commit message for the diff if it didn't have one.
 3. **Identify Context Files (BE GENEROUS):** Based on the identified project and the code changes, determine which other files in the repository would be useful to add to the context.
       Your goal is to provide the code review agents with as much surrounding context as possible. **Adding dozens of files is perfectly fine and encouraged.**
       Err heavily on the side of inclusion.
