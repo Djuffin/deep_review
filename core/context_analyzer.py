@@ -19,19 +19,6 @@ def analyze_context(cl_dir: Path, gemini_client: GeminiClient, model_name: str, 
     print(f"Reading files in '{cl_dir}' for analysis...")
     document_text = build_analysis_context(cl_dir)
 
-    # Add agent prompts to context
-    agent_texts = []
-    if agents_dir.is_dir():
-        for file_path in agents_dir.glob("*.md"):
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    agent_texts.append(f"--- Code Review Agent: {file_path.name} ---\n{f.read()}\n")
-            except Exception as e:
-                print(f"Failed to read agent prompt {file_path.name}: {e}")
-
-    if agent_texts:
-        document_text += "\n" + "\n".join(agent_texts)
-
     if not document_text.strip():
         print("No valid files found to analyze.")
         return None
