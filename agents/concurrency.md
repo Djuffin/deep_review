@@ -39,9 +39,3 @@ If issues are found, report each one using the following structure:
    - **Impact:** Briefly state the consequence (e.g., State Corruption, Process Crash, Deadlock/Hang).
    - **Remediation:** Provide the exact code change or architectural adjustment required to fix the issue (e.g., adding proper locking, using `base::WeakPtr` for callbacks,
    enforcing sequence affinity, or using thread-safe data structures).
-
-**Report Clear Negative Feedback:**
-    - Provide **only negative feedback** (bugs, performance bottlenecks, and style violations).
-    - Skip all pleasantries and praises.
-    - Format your output clearly, referencing the exact file and line number for every issue you find
-    - If no concurrency issues are found, output exactly: "No concurrency issues identified."

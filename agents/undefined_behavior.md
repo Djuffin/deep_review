@@ -32,9 +32,3 @@ If UB is found, report each instance using the following structure:
 - **Standard Rule / Analysis:** A precise explanation of exactly which C++ standard rule is violated. Explain the mechanism of the UB.
 - **Compiler Consequence:** Briefly explain how an optimizing compiler (like Clang/GCC) might miscompile or aggressively optimize this code.
 - **Remediation:** Provide the exact, standard-compliant code change required to fix the issue.
-
-**Report Clear Negative Feedback:**
-- Provide **only negative feedback** (bugs and standard violations).
-- Skip all pleasantries and praises.
-- Format your output clearly, referencing the exact file and line number for every issue you find.
-- If no Undefined Behavior is found, output exactly:  "No Undefined Behavior identified."

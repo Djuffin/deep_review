@@ -13,10 +13,6 @@ from core.gemini_client import GeminiClient
 from core.models import AgentReview
 from core.utils import build_review_context, save_file
 
-COMMON_AGENT_INSTRUCTION = """
-**CRITICAL INSTRUCTION:** You must analyze ONLY the code changes (the lines added or modified in the diff). Do NOT report issues, bugs, or improvements for existing code that was not modified in this changelist, even if it is provided in the context.
-"""
-
 def _run_single_agent(
     agent_name: str,
     prompt: str,
@@ -58,12 +54,22 @@ def run_review(cl_dir: Path, gemini_client: GeminiClient, model_name: str, statu
     # 1. Read the agents
     agents: List[tuple[str, str]] = []
 
+    # Load common instructions
+    common_instruction = ""
+    common_prompt_path = Path(__file__).parent.parent / "prompts" / "review_agent_common.md"
+    try:
+        with open(common_prompt_path, "r", encoding="utf-8") as f:
+            common_instruction = f.read().strip()
+    except Exception as e:
+        print(f"Warning: Failed to read common agent prompt {common_prompt_path}: {e}")
+
     if agents_dir.is_dir():
         for file_path in agents_dir.glob("*.md"):
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
                     agent_prompt = f.read().strip()
-                    agent_prompt += f"\n\n{COMMON_AGENT_INSTRUCTION}\n"
+                    if common_instruction:
+                        agent_prompt += f"\n\n{common_instruction}\n"
                     agents.append((file_path.stem, agent_prompt))
             except Exception as e:
                 print(f"Failed to read agent prompt {file_path.name}: {e}")
