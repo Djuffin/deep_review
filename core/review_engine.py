@@ -67,7 +67,12 @@ def run_review(cl_dir: Path, gemini_client: GeminiClient, model_name: str, statu
         for file_path in agents_dir.glob("*.md"):
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
-                    agent_prompt = f.read().strip()
+                    base_prompt = f.read().strip()
+                    
+                    # Repeat the main review prompt twice. Empirical evidence suggests 
+                    # that LLMs adhere better to instructions when they are repeated.
+                    agent_prompt = f"{base_prompt}\n\n{base_prompt}"
+                    
                     if common_instruction:
                         agent_prompt += f"\n\n{common_instruction}\n"
                     agents.append((file_path.stem, agent_prompt))
