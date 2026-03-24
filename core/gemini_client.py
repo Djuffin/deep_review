@@ -3,6 +3,8 @@ Gemini API client.
 """
 
 import json
+import time
+import random
 import urllib.request
 import urllib.error
 from typing import Dict, Any, Optional, Tuple
@@ -23,20 +25,30 @@ class GeminiClient:
         req_data = json.dumps(data).encode('utf-8') if data else None
         req = urllib.request.Request(url, data=req_data, headers=headers, method=method)
         
-        try:
-            with urllib.request.urlopen(req, timeout=timeout) as response:
-                if response.getcode() == 204: # No content (e.g. for DELETE)
-                    return {}
-                return json.loads(response.read().decode('utf-8'))
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode('utf-8')
-            raise GeminiAPIError(
-                f"Gemini API HTTP {e.code}: {e.reason}", 
-                status_code=e.code, 
-                details=error_body
-            )
-        except Exception as e:
-            raise GeminiAPIError(f"Failed to communicate with Gemini API: {e}")
+        max_retries = 5
+        base_delay = 2.0
+        
+        for attempt in range(max_retries):
+            try:
+                with urllib.request.urlopen(req, timeout=timeout) as response:
+                    if response.getcode() == 204: # No content (e.g. for DELETE)
+                        return {}
+                    return json.loads(response.read().decode('utf-8'))
+            except urllib.error.HTTPError as e:
+                error_body = e.read().decode('utf-8')
+                if e.code == 429 and attempt < max_retries - 1:
+                    sleep_time = (base_delay ** attempt) + random.uniform(0, 1)
+                    print(f"[Warning] Gemini API rate limit hit (429). Retrying in {sleep_time:.2f}s...")
+                    time.sleep(sleep_time)
+                    continue
+                
+                raise GeminiAPIError(
+                    f"Gemini API HTTP {e.code}: {e.reason}", 
+                    status_code=e.code, 
+                    details=error_body
+                )
+            except Exception as e:
+                raise GeminiAPIError(f"Failed to communicate with Gemini API: {e}")
 
     def create_cached_content(self, model_name: str, document_text: str, ttl_seconds: int = 600) -> Optional[str]:
         """
