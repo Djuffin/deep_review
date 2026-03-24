@@ -106,7 +106,7 @@ def run_review(cl_dir: Path, gemini_client: GeminiClient, model_name: str, statu
 
     # 5. Run agents in parallel
     results: List[AgentReview] = []
-    max_workers = min(10, len(agents))
+    max_workers = min(5, len(agents))
 
     # Initialize all as Pending for the UI
     for name, _ in agents:
