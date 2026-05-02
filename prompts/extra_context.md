@@ -1,7 +1,7 @@
 Based on the code change, the provided project tree, and the detailed summary you just created (provided in the context as CHANGE SUMMARY),
 determine which other files in the repository would be useful to add to the context.
 
-Your goal is to provide the code review agents with as much surrounding context as possible. **Adding 10+ files is perfectly fine and encouraged.**
+Your goal is to provide the code review agents with sufficient context. **Adding 10 to 20 files is perfectly fine.**
 Err heavily on the side of inclusion.
 
 - **HEADER DISCOVERY:** Scan the provided diff and modified files for `#include` statements, type names, namespaces, and function calls.
