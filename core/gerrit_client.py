@@ -149,20 +149,24 @@ class GerritClient:
         return self._execute_json_request(url, default_on_404={"entries": []})
 
     def fetch_file_history(self, project: str, commit_id: str, file_path: str, gitiles_commit_url: str = "", limit: int = 5) -> Dict[str, Any]:
-        """Fetches the commit history for a specific file via Gitiles."""
+        """Fetches the commit history for a specific file via Gerrit search."""
         encoded_path = urllib.parse.quote(file_path, safe='')
-        
-        if gitiles_commit_url:
-            # gitiles_commit_url usually looks like: https://host/project/+/commit_id
-            # We need to replace the /+/commit_id part with /+log/commit_id/path
-            base_url = gitiles_commit_url.split('/+/')[0]
-            url = f"{base_url}/+log/{commit_id}/{encoded_path}?format=JSON&n={limit}"
-        else:
-            encoded_project = urllib.parse.quote(project, safe='')
-            url = f"https://{self.host}/plugins/gitiles/{encoded_project}/+log/{commit_id}/{encoded_path}?format=JSON&n={limit}"
+        encoded_project = urllib.parse.quote(project, safe='')
 
-        return self._execute_json_request(url, default_on_404={"log": []})
+        endpoint = f"?q=project:{encoded_project}+file:{encoded_path}+status:merged&n={limit}&o=CURRENT_REVISION"
 
+        try:
+            changes = self.get_json(endpoint)
+            log = []
+            # Gerrit search returns a list of changes, not a dict
+            if isinstance(changes, list):
+                for change in changes:
+                    rev = change.get("current_revision")
+                    if rev:
+                        log.append({"commit": rev})
+            return {"log": log}
+        except Exception:
+            return {"log": []}
     def fetch_commit_details(self, project: str, commit_id: str, gitiles_commit_url: str = "") -> Dict[str, Any]:
         """Fetches details of a specific commit via Gitiles, including the tree_diff."""
         if gitiles_commit_url:
