@@ -92,8 +92,8 @@ def main():
     parser = argparse.ArgumentParser(description="Automated LLM-based Code Review System")
     parser.add_argument("url", help="Gerrit CL URL or numeric ID")
     parser.add_argument("--out-dir", type=str, help="Directory to save files (defaults to CL ID)")
-    parser.add_argument("--model", type=str, default="gemini-3.5-flash",
-                        help="The Gemini model to use for analysis and review (default: gemini-3.5-flash)")
+    parser.add_argument("--model", type=str, default="gemini-3.6-flash",
+                        help="The Gemini model to use for analysis and review (default: gemini-3.6-flash)")
     parser.add_argument("--persona", action="store_true",
                         help="Use famous programmer personas for review (e.g., Linus Torvalds, James Gosling)")
 

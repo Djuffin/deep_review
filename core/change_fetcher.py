@@ -236,7 +236,7 @@ def _build_and_save_project_tree(client: GerritClient, change_info: ChangeInfo, 
     for dir_path in sorted(list(shallow_dirs)):
         print(f"  Fetching shallow directory: '{dir_path}'")
         try:
-            dir_data = client.fetch_gitiles_directory(change_info.project, commit_id, dir_path, gitiles_commit_url=change_info.gitiles_link)
+            dir_data = client.fetch_gitiles_directory(change_info.project, commit_id, dir_path, gitiles_commit_url=change_info.gitiles_link, timeout=5.0)
             entries = dir_data.get("entries", [])
             for entry in entries:
                 if entry.get("type") == "blob":
@@ -251,7 +251,7 @@ def _build_and_save_project_tree(client: GerritClient, change_info: ChangeInfo, 
             continue
         print(f"  Fetching deep directory: '{dir_path}'")
         try:
-            dir_data = client.fetch_gitiles_directory(change_info.project, commit_id, dir_path, gitiles_commit_url=change_info.gitiles_link, recursive=True)
+            dir_data = client.fetch_gitiles_directory(change_info.project, commit_id, dir_path, gitiles_commit_url=change_info.gitiles_link, recursive=True, timeout=5.0)
             entries = dir_data.get("entries", [])
             for entry in entries:
                 if entry.get("type") == "blob":
@@ -294,11 +294,6 @@ def fetch_change(url: str, output_dir: Path) -> ChangeInfo:
             deep_dirs.add("/".join(parts[:-1]))
 
     shallow_dirs = set()
-    for dir_path in deep_dirs:
-        parts = dir_path.split('/')
-        for i in range(1, len(parts)):
-            shallow_dirs.add("/".join(parts[:i]))
-
     shallow_dirs.update(coupled_dirs)
     shallow_dirs.update(imported_dirs)
     

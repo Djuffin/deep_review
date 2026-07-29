@@ -25,7 +25,7 @@ class GerritClient:
         self.min_delay_seconds = min_delay_seconds
         self._last_request_time = 0.0
 
-    def _execute_request(self, url: str) -> bytes:
+    def _execute_request(self, url: str, timeout: float = 30.0) -> bytes:
         """Helper to make a raw GET request with proactive throttling and retries."""
         req = urllib.request.Request(url)
         max_retries = 5
@@ -40,7 +40,7 @@ class GerritClient:
             self._last_request_time = time.time()
 
             try:
-                with urllib.request.urlopen(req) as response:
+                with urllib.request.urlopen(req, timeout=timeout) as response:
                     return response.read()
             except urllib.error.HTTPError as e:
                 if e.code == 429 and attempt < max_retries - 1:
@@ -59,18 +59,18 @@ class GerritClient:
                     continue
                 raise GerritAPIError(f"Failed to fetch {url}: {e}")
 
-    def _make_request(self, endpoint: str) -> bytes:
+    def _make_request(self, endpoint: str, timeout: float = 30.0) -> bytes:
         """Helper to make a raw GET request to the Gerrit API endpoints."""
         url = f"{self.base_url}/{endpoint}"
         try:
-            return self._execute_request(url)
+            return self._execute_request(url, timeout=timeout)
         except urllib.error.HTTPError as e:
             raise GerritAPIError(f"HTTP Error {e.code} fetching {url}: {e.reason}", status_code=e.code, details=e.reason)
 
-    def _execute_json_request(self, url: str, default_on_404: Optional[Any] = None) -> Dict[str, Any]:
+    def _execute_json_request(self, url: str, default_on_404: Optional[Any] = None, timeout: float = 30.0) -> Dict[str, Any]:
         """Executes a request and parses the JSON, handling 404s with an optional default value."""
         try:
-            raw_bytes = self._execute_request(url)
+            raw_bytes = self._execute_request(url, timeout=timeout)
         except urllib.error.HTTPError as e:
             if e.code == 404 and default_on_404 is not None:
                 return default_on_404
@@ -126,7 +126,7 @@ class GerritClient:
         endpoint = f"{change_id}/revisions/current/files/{encoded_path}/content?parent=1"
         return self.get_base64_file(endpoint)
 
-    def fetch_gitiles_directory(self, project: str, commit_id: str, dir_path: str, gitiles_commit_url: str = "", recursive: bool = False) -> Dict[str, Any]:
+    def fetch_gitiles_directory(self, project: str, commit_id: str, dir_path: str, gitiles_commit_url: str = "", recursive: bool = False, timeout: float = 5.0) -> Dict[str, Any]:
         """
         Fetches the contents of a directory using the Gitiles REST API.
         dir_path should be empty string for root, or a path like 'src/main'.
@@ -146,7 +146,7 @@ class GerritClient:
         if recursive:
             url += "&recursive=1"
         
-        return self._execute_json_request(url, default_on_404={"entries": []})
+        return self._execute_json_request(url, default_on_404={"entries": []}, timeout=timeout)
 
     def fetch_file_history(self, project: str, commit_id: str, file_path: str, gitiles_commit_url: str = "", limit: int = 5) -> Dict[str, Any]:
         """Fetches the commit history for a specific file via Gerrit search."""
