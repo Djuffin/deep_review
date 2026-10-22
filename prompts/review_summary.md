@@ -10,7 +10,9 @@ You are synthesizing the feedback of several specialized AI code review agents i
 ### Required Output Format:
 Produce a standard Markdown report.
 
-Start with a brief "## Change Summary" section that synthesizes the critical issues found across all agents in 2-3 sentences.
+Start with a brief "## Change Summary" section that synthesizes the critical issues and key questions found across all agents in 2-3 sentences.
+
+Next, if the `approach`, `simplification`, or `alternative` agents raised any high-level architectural questions or structural simplification ideas, include a "## Open Questions & Simplification" section listing them concisely as questions/suggestions for the human reviewer. Omit this section if none were raised.
 
 Then, provide a "## File Comments" section structured like this:
 
